@@ -1,5 +1,22 @@
 import { db } from './lib/db';
 import { ScheduledEvent } from './types';
+import { Resend } from 'resend';
+
+// Add types for our request bodies
+interface ScheduleEmailRequest {
+  userId: string;
+  recipientEmail: string;
+  subject: string;
+  body: string;
+  sendAt: string;
+}
+
+interface ScheduleWelcomeSeriesRequest {
+  userId: string;
+  name: string;
+  email: string;
+  test?: boolean;
+}
 
 /**
  * Schedule an email to be sent at a specific time
@@ -16,14 +33,14 @@ export async function scheduleEmail({
   subject: string;
   body: string;
   sendAt: Date;
-}): Promise<void> {
+}, env?: Env): Promise<void> {
   await db.scheduleEmail({
     userId,
     recipientEmail,
     subject,
     body,
     sendAt,
-  });
+  }, env);
 }
 
 /**
@@ -39,7 +56,8 @@ export async function scheduleWelcomeEmailSeries(
   userId: string,
   name: string,
   email: string,
-  test: boolean = false
+  test: boolean = false,
+  env?: Env
 ): Promise<void> {
   try {
     // Override email and name in test mode
@@ -97,15 +115,17 @@ export async function scheduleWelcomeEmailSeries(
         subject: emailData.subject,
         body: emailData.body,
         sendAt,
-      });
+      }, env);
 
       // Add a 2.5-second delay between scheduling to avoid rate limits
       if (i < emailSeries.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 2500));
       }
     }
+
+    console.log(`Scheduled ${emailSeries.length} welcome emails for user ${userId}`);
   } catch (error) {
-    console.error('Error scheduling welcome email series:', error);
+    console.error("Error scheduling welcome email series:", error);
     throw error;
   }
 }
@@ -441,25 +461,339 @@ export function getDayEightEmailContent(firstName: string): string {
 
 // Add a scheduled event handler for the cron job
 export default {
+  // Handle scheduled events (cron)
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     console.log("Email scheduler running...");
     
     try {
       // Find all pending emails scheduled to be sent
-      const pendingEmails = await db.getPendingEmails();
+      const pendingEmails = await db.getPendingEmails(env);
+      
+      if (pendingEmails.length === 0) {
+        console.log("No pending emails to process");
+        return;
+      }
+      
+      // Create Resend client if API key exists
+      const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
       
       // Process each pending email
       for (const email of pendingEmails) {
-        // TODO: Add actual email sending logic here using Resend or another provider
-        console.log(`Sending email to ${email.recipient_email} with subject: ${email.subject}`);
-        
-        // Mark the email as sent
-        await db.markEmailAsSent(email.id);
+        try {
+          console.log(`Sending email to ${email.recipient_email} with subject: ${email.subject}`);
+          
+          // Only attempt to send email if Resend API key is available
+          if (resend) {
+            const { data, error } = await resend.emails.send({
+              from: 'InterviewMaster AI <noreply@interviewmaster.ai>',
+              to: email.recipient_email,
+              subject: email.subject,
+              html: email.body,
+            });
+            
+            if (error) {
+              console.error('Error sending email:', error);
+            } else {
+              console.log(`Email sent successfully: ${JSON.stringify(data)}`);
+            }
+          } else {
+            console.log('Skipping actual email sending - RESEND_API_KEY not configured');
+          }
+          
+          // Mark the email as sent regardless of whether we actually sent it
+          // This allows us to test without sending real emails
+          await db.markEmailAsSent(email.id, env);
+        } catch (emailError) {
+          console.error(`Error sending email ${email.id}:`, emailError);
+          // Continue with next email even if this one failed
+        }
       }
       
       console.log(`Processed ${pendingEmails.length} emails`);
     } catch (error) {
       console.error("Error processing scheduled emails:", error);
+    }
+  },
+
+  // Handle HTTP requests
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    // Enable CORS
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+
+    // Handle CORS preflight requests
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: corsHeaders,
+      });
+    }
+
+    // Route handlers
+    try {
+      // Simple test route - doesn't need database access
+      if (path === "/ping" || path === "/") {
+        return new Response(
+          JSON.stringify({ 
+            status: "ok", 
+            message: "Email scheduler service is running", 
+            environment: {
+              dbUrlPresent: !!env?.DATABASE_URL,
+              dbUrlStart: env?.DATABASE_URL ? env.DATABASE_URL.substring(0, 10) + "..." : "not set"
+            }
+          }),
+          { 
+            status: 200, 
+            headers: { 
+              "Content-Type": "application/json",
+              ...corsHeaders
+            } 
+          }
+        );
+      }
+      
+      // Test endpoint to create a test user and schedule a test email
+      if (path === "/test-setup" && request.method === "GET") {
+        try {
+          // Create a test user
+          const testUser = await db.createTestUser(env);
+          
+          // Schedule a test email to be sent 2 minutes from now
+          const sendAt = new Date();
+          sendAt.setMinutes(sendAt.getMinutes() + 2);
+          
+          await scheduleEmail({
+            userId: testUser.id,
+            recipientEmail: "jeremiahoclark@gmail.com",
+            subject: "Test Email from Scheduler",
+            body: "<h1>This is a test email</h1><p>Testing the email scheduler service</p>",
+            sendAt: sendAt
+          }, env);
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Test user created and email scheduled",
+              user: {
+                id: testUser.id,
+                email: testUser.email,
+                name: testUser.name
+              },
+              email: {
+                sendAt: sendAt.toISOString()
+              }
+            }),
+            { 
+              status: 200, 
+              headers: { 
+                "Content-Type": "application/json",
+                ...corsHeaders
+              } 
+            }
+          );
+        } catch (error) {
+          console.error("Error in test setup:", error);
+          return new Response(
+            JSON.stringify({ 
+              error: "Test setup failed", 
+              message: error instanceof Error ? error.message : String(error) 
+            }),
+            { 
+              status: 500, 
+              headers: { 
+                "Content-Type": "application/json",
+                ...corsHeaders
+              } 
+            }
+          );
+        }
+      }
+      
+      // Test endpoint to schedule a welcome email series
+      if (path === "/test-welcome-series" && request.method === "GET") {
+        try {
+          // Create a test user
+          const testUser = await db.createTestUser(env);
+          
+          // Schedule the welcome email series
+          await scheduleWelcomeEmailSeries(
+            testUser.id,
+            testUser.name,
+            testUser.email,
+            true, // Use test mode
+            env
+          );
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Welcome email series scheduled",
+              user: {
+                id: testUser.id,
+                email: testUser.email,
+                name: testUser.name
+              }
+            }),
+            { 
+              status: 200, 
+              headers: { 
+                "Content-Type": "application/json",
+                ...corsHeaders
+              } 
+            }
+          );
+        } catch (error) {
+          console.error("Error scheduling welcome series:", error);
+          return new Response(
+            JSON.stringify({ 
+              error: "Welcome series setup failed", 
+              message: error instanceof Error ? error.message : String(error) 
+            }),
+            { 
+              status: 500, 
+              headers: { 
+                "Content-Type": "application/json",
+                ...corsHeaders
+              } 
+            }
+          );
+        }
+      }
+      
+      // Schedule a single email
+      if (path === "/schedule-email" && request.method === "POST") {
+        const requestData = await request.json() as ScheduleEmailRequest;
+        
+        // Validate required fields
+        if (!requestData.userId || !requestData.recipientEmail || 
+            !requestData.subject || !requestData.body || !requestData.sendAt) {
+          return new Response(
+            JSON.stringify({ error: "Missing required fields" }),
+            { 
+              status: 400,
+              headers: { 
+                "Content-Type": "application/json",
+                ...corsHeaders
+              }
+            }
+          );
+        }
+        
+        // Parse sendAt date
+        const sendAt = new Date(requestData.sendAt);
+        
+        // Schedule the email
+        await scheduleEmail({
+          userId: requestData.userId,
+          recipientEmail: requestData.recipientEmail,
+          subject: requestData.subject,
+          body: requestData.body,
+          sendAt: sendAt
+        }, env);
+        
+        return new Response(
+          JSON.stringify({ success: true, message: "Email scheduled successfully" }),
+          { 
+            status: 200, 
+            headers: { 
+              "Content-Type": "application/json",
+              ...corsHeaders
+            } 
+          }
+        );
+      }
+      
+      // Schedule welcome email series
+      if (path === "/schedule-welcome-series" && request.method === "POST") {
+        const requestData = await request.json() as ScheduleWelcomeSeriesRequest;
+        
+        // Validate required fields
+        if (!requestData.userId || !requestData.name || !requestData.email) {
+          return new Response(
+            JSON.stringify({ error: "Missing required fields" }),
+            { 
+              status: 400, 
+              headers: { 
+                "Content-Type": "application/json",
+                ...corsHeaders
+              } 
+            }
+          );
+        }
+        
+        // Schedule the welcome email series
+        await scheduleWelcomeEmailSeries(
+          requestData.userId,
+          requestData.name,
+          requestData.email,
+          requestData.test || false,
+          env
+        );
+        
+        return new Response(
+          JSON.stringify({ success: true, message: "Welcome email series scheduled successfully" }),
+          { 
+            status: 200, 
+            headers: { 
+              "Content-Type": "application/json",
+              ...corsHeaders
+            } 
+          }
+        );
+      }
+      
+      // Get pending emails (for testing/debugging)
+      if (path === "/pending-emails" && request.method === "GET") {
+        const pendingEmails = await db.getPendingEmails(env);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            count: pendingEmails.length,
+            emails: pendingEmails 
+          }),
+          { 
+            status: 200, 
+            headers: { 
+              "Content-Type": "application/json",
+              ...corsHeaders
+            } 
+          }
+        );
+      }
+      
+      // Default response for unmatched routes
+      return new Response(
+        JSON.stringify({ error: "Not found" }),
+        { 
+          status: 404, 
+          headers: { 
+            "Content-Type": "application/json",
+            ...corsHeaders
+          } 
+        }
+      );
+    } catch (error) {
+      console.error("Error handling request:", error);
+      
+      return new Response(
+        JSON.stringify({ 
+          error: "Internal server error", 
+          message: error instanceof Error ? error.message : String(error) 
+        }),
+        { 
+          status: 500, 
+          headers: { 
+            "Content-Type": "application/json",
+            ...corsHeaders
+          } 
+        }
+      );
     }
   }
 };

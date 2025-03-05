@@ -7,6 +7,7 @@ declare global {
     // Add your environment variables here
     DATABASE_URL?: string;
     // Add API keys, etc.
+    RESEND_API_KEY?: string;
   }
 }
 

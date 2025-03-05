@@ -46,8 +46,12 @@ describe('Cron Scheduler', () => {
     const mockEvent = {
       cron: '*/1 * * * *',
       scheduledTime: Date.now(),
-      // Add other properties if necessary...
     } as unknown as ScheduledEvent;
+    
+    // Create mock env with database URL
+    const mockEnv = {
+      DATABASE_URL: 'postgresql://test:test@test.com/test'
+    } as Env;
     
     // Create mock execution context
     const mockCtx = {
@@ -56,13 +60,15 @@ describe('Cron Scheduler', () => {
     } as unknown as ExecutionContext;
     
     // Call the scheduled function as if triggered by cron
-    await worker.scheduled(mockEvent, {} as Env, mockCtx);
+    await worker.scheduled(mockEvent, mockEnv, mockCtx);
     
-    // Verify the database queries were called
+    // Verify the database queries were called with the environment
     expect(db.getPendingEmails).toHaveBeenCalledTimes(1);
+    expect(db.getPendingEmails).toHaveBeenCalledWith(mockEnv);
+    
     expect(db.markEmailAsSent).toHaveBeenCalledTimes(2);
-    expect(db.markEmailAsSent).toHaveBeenCalledWith('email-1');
-    expect(db.markEmailAsSent).toHaveBeenCalledWith('email-2');
+    expect(db.markEmailAsSent).toHaveBeenCalledWith('email-1', mockEnv);
+    expect(db.markEmailAsSent).toHaveBeenCalledWith('email-2', mockEnv);
     
     // Verify the logs
     expect(consoleSpy).toHaveBeenCalledWith('Email scheduler running...');
@@ -81,6 +87,11 @@ describe('Cron Scheduler', () => {
       scheduledTime: Date.now(),
     } as unknown as ScheduledEvent;
     
+    // Create mock env
+    const mockEnv = {
+      DATABASE_URL: 'postgresql://test:test@test.com/test'
+    } as Env;
+    
     // Create mock execution context
     const mockCtx = {
       waitUntil: vi.fn(),
@@ -88,10 +99,11 @@ describe('Cron Scheduler', () => {
     } as unknown as ExecutionContext;
     
     // Call the scheduled function as if triggered by cron
-    await worker.scheduled(mockEvent, {} as Env, mockCtx);
+    await worker.scheduled(mockEvent, mockEnv, mockCtx);
     
     // Verify the database query was called
     expect(db.getPendingEmails).toHaveBeenCalledTimes(1);
+    expect(db.getPendingEmails).toHaveBeenCalledWith(mockEnv);
     expect(db.markEmailAsSent).not.toHaveBeenCalled();
     
     // Verify the logs
@@ -112,6 +124,11 @@ describe('Cron Scheduler', () => {
       scheduledTime: Date.now(),
     } as unknown as ScheduledEvent;
     
+    // Create mock env
+    const mockEnv = {
+      DATABASE_URL: 'postgresql://test:test@test.com/test'
+    } as Env;
+    
     // Create mock execution context
     const mockCtx = {
       waitUntil: vi.fn(),
@@ -119,7 +136,7 @@ describe('Cron Scheduler', () => {
     } as unknown as ExecutionContext;
     
     // Call the scheduled function as if triggered by cron
-    await worker.scheduled(mockEvent, {} as Env, mockCtx);
+    await worker.scheduled(mockEvent, mockEnv, mockCtx);
     
     // Verify error was logged
     expect(consoleErrorSpy).toHaveBeenCalledWith('Error processing scheduled emails:', expect.any(Error));
