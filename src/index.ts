@@ -767,6 +767,104 @@ export default {
         );
       }
       
+      // Manual trigger for cron job (for testing/debugging)
+      if (path === "/trigger-cron" && request.method === "GET") {
+        try {
+          // Find all pending emails scheduled to be sent
+          const pendingEmails = await db.getPendingEmails(env);
+          
+          if (pendingEmails.length === 0) {
+            return new Response(
+              JSON.stringify({ 
+                success: true, 
+                message: "No pending emails to process" 
+              }),
+              { 
+                status: 200, 
+                headers: { 
+                  "Content-Type": "application/json",
+                  ...corsHeaders
+                } 
+              }
+            );
+          }
+          
+          // Create Resend client if API key exists
+          const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
+          
+          // Process each pending email
+          const results = [];
+          for (const email of pendingEmails) {
+            try {
+              console.log(`Sending email to ${email.recipient_email} with subject: ${email.subject}`);
+              
+              // Only attempt to send email if Resend API key is available
+              if (resend) {
+                const { data, error } = await resend.emails.send({
+                  from: 'InterviewMaster AI <noreply@interviewmaster.ai>',
+                  to: email.recipient_email,
+                  subject: email.subject,
+                  html: email.body,
+                });
+                
+                if (error) {
+                  console.error('Error sending email:', error);
+                  results.push({ id: email.id, status: 'error', error });
+                } else {
+                  console.log(`Email sent successfully: ${JSON.stringify(data)}`);
+                  results.push({ id: email.id, status: 'sent', data });
+                }
+              } else {
+                console.log('Skipping actual email sending - RESEND_API_KEY not configured');
+                results.push({ id: email.id, status: 'skipped', reason: 'RESEND_API_KEY not configured' });
+              }
+              
+              // Mark the email as sent regardless of whether we actually sent it
+              // This allows us to test without sending real emails
+              await db.markEmailAsSent(email.id, env);
+            } catch (emailError) {
+              console.error(`Error sending email ${email.id}:`, emailError);
+              results.push({ 
+                id: email.id, 
+                status: 'error', 
+                error: emailError instanceof Error ? emailError.message : String(emailError) 
+              });
+              // Continue with next email even if this one failed
+            }
+          }
+          
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              processed: pendingEmails.length,
+              results
+            }),
+            { 
+              status: 200, 
+              headers: { 
+                "Content-Type": "application/json",
+                ...corsHeaders
+              } 
+            }
+          );
+        } catch (error) {
+          console.error("Error processing scheduled emails:", error);
+          return new Response(
+            JSON.stringify({ 
+              error: "Failed to process emails", 
+              message: error instanceof Error ? error.message : String(error) 
+            }),
+            { 
+              status: 500, 
+              headers: { 
+                "Content-Type": "application/json",
+                ...corsHeaders
+              } 
+            }
+          );
+        }
+      }
+      
       // Default response for unmatched routes
       return new Response(
         JSON.stringify({ error: "Not found" }),
