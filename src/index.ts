@@ -563,9 +563,9 @@ export default {
           // Create a test user
           const testUser = await db.createTestUser(env);
           
-          // Schedule a test email to be sent 2 minutes from now
+          // Schedule a test email to be sent 10 minutes from now
           const sendAt = new Date();
-          sendAt.setMinutes(sendAt.getMinutes() + 2);
+          sendAt.setMinutes(sendAt.getMinutes() + 10);
           
           await scheduleEmail({
             userId: testUser.id,

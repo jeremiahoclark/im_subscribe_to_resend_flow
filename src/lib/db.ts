@@ -46,6 +46,7 @@ export const db = {
     const result = await sql`
       SELECT * FROM scheduled_email 
       WHERE send_at <= ${now} AND sent = false
+      ORDER BY send_at ASC
     `;
     return result;
   },
