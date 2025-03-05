@@ -113,7 +113,7 @@ export async function scheduleWelcomeEmailSeries(
  * Placeholder functions for email content
  * These would typically return full HTML content in a real implementation
  */
-function getDayTwoEmailContent(firstName: string): string {
+export function getDayTwoEmailContent(firstName: string): string {
   return `
     <h2>The hardest part of learning SQL</h2>
     <h3>And how to overcome it 💪</h3>
@@ -146,7 +146,7 @@ function getDayTwoEmailContent(firstName: string): string {
   `;
 }
 
-function getDayThreeEmailContent(firstName: string): string {
+export function getDayThreeEmailContent(firstName: string): string {
   return `
     <h2>The only SQL learning roadmap you need</h2>
     <h3>Save this for later 🔖</h3>
@@ -239,7 +239,7 @@ function getDayThreeEmailContent(firstName: string): string {
   `;
 }
 
-function getDayFourEmailContent(firstName: string): string {
+export function getDayFourEmailContent(firstName: string): string {
   return `
     <h2>My SQL interview framework</h2>
     <h3>This landed me offers at Meta, Google, Amazon & more.</h3>
@@ -292,7 +292,7 @@ function getDayFourEmailContent(firstName: string): string {
   `;
 }
 
-function getDayFiveEmailContent(firstName: string): string {
+export function getDayFiveEmailContent(firstName: string): string {
   return `
     <h2>How to master SQL</h2>
     <h3>The secret to getting really good</h3>
@@ -347,7 +347,7 @@ function getDayFiveEmailContent(firstName: string): string {
   `;
 }
 
-function getDaySixEmailContent(firstName: string): string {
+export function getDaySixEmailContent(firstName: string): string {
   return `
     <h2>Stand out in a SQL interview</h2>
     <h3>Differentiate yourself from the crowd</h3>
@@ -388,7 +388,7 @@ function getDaySixEmailContent(firstName: string): string {
   `;
 }
 
-function getDaySevenEmailContent(firstName: string): string {
+export function getDaySevenEmailContent(firstName: string): string {
   return `
     <h2>The only way to get good at SQL</h2>
     <h3>👀</h3>
@@ -415,7 +415,7 @@ function getDaySevenEmailContent(firstName: string): string {
   `;
 }
 
-function getDayEightEmailContent(firstName: string): string {
+export function getDayEightEmailContent(firstName: string): string {
   return `
     <h2>What would help you learn SQL faster?</h2>
     <h3>We'd love to hear your advice.</h3>

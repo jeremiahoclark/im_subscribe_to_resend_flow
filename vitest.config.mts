@@ -7,5 +7,8 @@ export default defineWorkersConfig({
 				wrangler: { configPath: './wrangler.jsonc' },
 			},
 		},
+		setupFiles: ['./test/setup.ts'],
+		// Increase timeout for tests
+		testTimeout: 10000
 	},
 });
