@@ -15,5 +15,9 @@
 		"typescript": "^5.5.2",
 		"vitest": "~2.1.9",
 		"wrangler": "^3.112.0"
+	},
+	"dependencies": {
+		"@neondatabase/serverless": "^0.10.4",
+		"resend": "^4.1.2"
 	}
 }
