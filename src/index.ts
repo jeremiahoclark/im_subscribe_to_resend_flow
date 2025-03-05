@@ -1,4 +1,5 @@
 import { db } from './lib/db';
+import { ScheduledEvent } from './types';
 
 /**
  * Schedule an email to be sent at a specific time
@@ -437,3 +438,28 @@ export function getDayEightEmailContent(firstName: string): string {
     <p><em>Want fewer emails?</em> <a href="https://interviewmaster.ai/unsubscribe?email=${encodeURIComponent(firstName)}">You can unsubscribe here</a>.</p>
   `;
 }
+
+// Add a scheduled event handler for the cron job
+export default {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    console.log("Email scheduler running...");
+    
+    try {
+      // Find all pending emails scheduled to be sent
+      const pendingEmails = await db.getPendingEmails();
+      
+      // Process each pending email
+      for (const email of pendingEmails) {
+        // TODO: Add actual email sending logic here using Resend or another provider
+        console.log(`Sending email to ${email.recipient_email} with subject: ${email.subject}`);
+        
+        // Mark the email as sent
+        await db.markEmailAsSent(email.id);
+      }
+      
+      console.log(`Processed ${pendingEmails.length} emails`);
+    } catch (error) {
+      console.error("Error processing scheduled emails:", error);
+    }
+  }
+};
