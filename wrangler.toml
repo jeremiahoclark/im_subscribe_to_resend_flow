@@ -1,0 +1,5 @@
+name = "email-scheduler"
+compatibility_date = "2023-10-01"
+
+[[triggers]]
+schedule = "*/1 * * * *" # Runs every minute
