@@ -1,5 +1,5 @@
-name = "email-scheduler"
+name = "im-streak-reset"
 compatibility_date = "2023-10-01"
 
 [[triggers]]
-schedule = "*/1 * * * *" # Runs every minute
+schedule = "0 * * * *" # Runs every hour at minute 0
