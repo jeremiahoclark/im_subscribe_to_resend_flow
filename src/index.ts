@@ -92,7 +92,7 @@ async function performStreakReset(env: Env) {
     // Create or replace the reset_streaks function
     await pool.query(`
       CREATE OR REPLACE FUNCTION reset_streaks() RETURNS void AS $$
-        UPDATE "UserProgress" up
+        UPDATE user_progress up
         SET current_streak = 0
         FROM user_profile prof
         WHERE up.user_id = prof.user_id
@@ -129,7 +129,7 @@ async function testUserStreakReset(userId: string, env: Env) {
       SELECT 
         EXISTS (
           SELECT 1
-          FROM "UserProgress" up
+          FROM user_progress up
           JOIN user_profile prof ON up.user_id = prof.user_id
           WHERE up.user_id = $1
             AND up.current_streak > 0
@@ -166,7 +166,7 @@ async function testAllUsersStreakReset(env: Env) {
           THEN true
           ELSE false
         END as should_reset
-      FROM "UserProgress" up
+      FROM user_progress up
       JOIN user_profile prof ON up.user_id = prof.user_id
     `);
 
