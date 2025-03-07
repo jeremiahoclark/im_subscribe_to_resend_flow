@@ -23,6 +23,7 @@
 	"dependencies": {
 		"@iarna/toml": "^2.2.5",
 		"@neondatabase/serverless": "^0.10.4",
+		"pg": "^8.13.3",
 		"resend": "^4.1.2"
 	}
 }

@@ -1,10 +1,16 @@
-import { Pool } from 'pg';
+import { Pool } from '@neondatabase/serverless';
 
+// Scheduled event to reset streaks hourly
 export default {
-  // Scheduled event to reset streaks hourly
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     console.log("Scheduled streak reset running...");
-    await performStreakReset(env);
+    try {
+      await performStreakReset(env);
+      console.log("Scheduled streak reset completed successfully");
+    } catch (error) {
+      console.error("Scheduled streak reset failed:", error instanceof Error ? error.message : String(error));
+      console.error("Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    }
   },
 
   // Handle HTTP requests
@@ -13,41 +19,51 @@ export default {
     const path = url.pathname;
 
     if (path === '/trigger') {
-      // Manual trigger to run the streak reset
       try {
+        console.log("Manual streak reset triggered");
         await performStreakReset(env);
+        console.log("Manual streak reset completed successfully");
         return new Response('Streak reset triggered successfully', { status: 200 });
       } catch (error) {
-        console.error('Error during manual trigger:', error);
-        return new Response('Error during streak reset', { status: 500 });
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error));
+        console.error('Error during manual trigger:', errorMessage);
+        console.error('Error details:', errorDetails);
+        return new Response(`Error during streak reset: ${errorMessage}`, { status: 500 });
       }
     } else if (path === '/test-user') {
-      // Test endpoint for a specific user
       const userId = url.searchParams.get('user_id');
       if (!userId) {
         return new Response('Missing user_id parameter', { status: 400 });
       }
       try {
+        console.log(`Testing streak reset for user: ${userId}`);
         const result = await testUserStreakReset(userId, env);
+        console.log(`Test result for user ${userId}:`, result);
         return new Response(JSON.stringify(result), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
       } catch (error) {
-        console.error('Error during test-user:', error);
-        return new Response('Error during test', { status: 500 });
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`Error during test-user for ${userId}:`, errorMessage);
+        console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        return new Response(`Error during test: ${errorMessage}`, { status: 500 });
       }
     } else if (path === '/test-all') {
-      // Test endpoint for all users
       try {
+        console.log("Testing streak reset for all users");
         const results = await testAllUsersStreakReset(env);
+        console.log(`Test results for all users: ${results.length} users checked`);
         return new Response(JSON.stringify(results), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
       } catch (error) {
-        console.error('Error during test-all:', error);
-        return new Response('Error during test', { status: 500 });
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Error during test-all:', errorMessage);
+        console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        return new Response(`Error during test: ${errorMessage}`, { status: 500 });
       }
     } else {
       return new Response('Not found', { status: 404 });
@@ -57,18 +73,22 @@ export default {
 
 // Perform the actual streak reset (modifies the database)
 async function performStreakReset(env: Env) {
-  const pool = new Pool({
-    connectionString: env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
-
+  console.log("Starting streak reset process");
+  if (!env.DATABASE_URL) {
+    throw new Error("DATABASE_URL environment variable is not set");
+  }
+  
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
   try {
-    // Add timezone column if it doesn’t exist
+    console.log("Connected to database, adding timezone column if needed");
+    // Add timezone column if it doesn't exist
     await pool.query(`
       ALTER TABLE user_profile
       ADD COLUMN IF NOT EXISTS timezone text NOT NULL DEFAULT 'America/Los_Angeles';
     `);
+    console.log("Timezone column check completed");
 
+    console.log("Creating or replacing reset_streaks function");
     // Create or replace the reset_streaks function
     await pool.query(`
       CREATE OR REPLACE FUNCTION reset_streaks() RETURNS void AS $$
@@ -81,23 +101,30 @@ async function performStreakReset(env: Env) {
           AND (up.last_attempt_date AT TIME ZONE prof.timezone)::date < (NOW() AT TIME ZONE prof.timezone)::date - INTERVAL '1 day'
       $$ LANGUAGE sql;
     `);
+    console.log("Reset function created successfully");
 
     // Execute the streak reset
-    await pool.query('SELECT reset_streaks();');
-    console.log("Streaks reset successfully");
+    console.log("Executing streak reset");
+    const result = await pool.query('SELECT reset_streaks();');
+    console.log("Streaks reset successfully", result);
+  } catch (error) {
+    console.error("Error in performStreakReset:", error instanceof Error ? error.message : String(error));
+    throw error; // Re-throw to be handled by the caller
   } finally {
+    console.log("Closing database connection");
     await pool.end();
   }
 }
 
-// Test if a specific user’s streak should be reset (ignores timezones, no DB modification)
+// Test if a specific user's streak should be reset (ignores timezones, no DB modification)
 async function testUserStreakReset(userId: string, env: Env) {
-  const pool = new Pool({
-    connectionString: env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
-
+  if (!env.DATABASE_URL) {
+    throw new Error("DATABASE_URL environment variable is not set");
+  }
+  
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
   try {
+    console.log(`Testing if user ${userId} streak should be reset`);
     const result = await pool.query(`
       SELECT 
         EXISTS (
@@ -112,6 +139,9 @@ async function testUserStreakReset(userId: string, env: Env) {
     `, [userId]);
 
     return { should_reset: result.rows[0].should_reset };
+  } catch (error) {
+    console.error(`Error in testUserStreakReset for ${userId}:`, error instanceof Error ? error.message : String(error));
+    throw error;
   } finally {
     await pool.end();
   }
@@ -119,12 +149,13 @@ async function testUserStreakReset(userId: string, env: Env) {
 
 // Test all users and return whether their streaks should be reset (ignores timezones, no DB modification)
 async function testAllUsersStreakReset(env: Env) {
-  const pool = new Pool({
-    connectionString: env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
-
+  if (!env.DATABASE_URL) {
+    throw new Error("DATABASE_URL environment variable is not set");
+  }
+  
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
   try {
+    console.log("Testing streak reset for all users");
     const result = await pool.query(`
       SELECT 
         prof.email,
@@ -139,7 +170,11 @@ async function testAllUsersStreakReset(env: Env) {
       JOIN user_profile prof ON up.user_id = prof.user_id
     `);
 
+    console.log(`Found ${result.rows.length} users to check for streak reset`);
     return result.rows;
+  } catch (error) {
+    console.error("Error in testAllUsersStreakReset:", error instanceof Error ? error.message : String(error));
+    throw error;
   } finally {
     await pool.end();
   }

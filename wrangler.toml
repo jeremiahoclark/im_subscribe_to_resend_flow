@@ -1,5 +1,6 @@
-name = "im-streak-reset"
+name = "streak-reset-worker"
 compatibility_date = "2023-10-01"
+nodejs_compat = true  # Enable Node.js compatibility
 
 [[triggers]]
 schedule = "0 * * * *" # Runs every hour at minute 0
