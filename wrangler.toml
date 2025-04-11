@@ -1,6 +1,6 @@
-name = "streak-reset-worker"
+name = "subscribe-to-resend-flow"
 compatibility_date = "2023-10-01"
 nodejs_compat = true  # Enable Node.js compatibility
 
 [[triggers]]
-schedule = "0 * * * *" # Runs every hour at minute 0
+schedule = "45 * * * *" # Runs every hour at minute 45

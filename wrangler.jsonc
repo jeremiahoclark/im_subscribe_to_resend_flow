@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "im-streak-reset",
+	"name": "im-subscribe-to-resend-flow",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-03-03",
 	"observability": {

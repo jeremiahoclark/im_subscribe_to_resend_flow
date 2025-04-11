@@ -1,5 +1,5 @@
 {
-	"name": "email-scheduler",
+	"name": "subscribe-to-resend-flow",
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {
@@ -24,6 +24,6 @@
 		"@iarna/toml": "^2.2.5",
 		"@neondatabase/serverless": "^0.10.4",
 		"pg": "^8.13.3",
-		"resend": "^4.1.2"
+		"resend": "^4.2.0"
 	}
 }
