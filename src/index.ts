@@ -40,6 +40,42 @@ export default {
         console.error('Error details:', errorDetails);
         return new Response(`Error during Resend sync: ${errorMessage}`, { status: 500 });
       }
+    } else if (path === '/') {
+      return new Response(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Manual Resend Sync</title>
+  <style>
+    body { font-family: sans-serif; margin: 2em; }
+    button { font-size: 1.2em; padding: 0.5em 1.5em; }
+    #result { margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <h1>Manual Resend Sync</h1>
+  <button id="run-btn">Run Migration</button>
+  <div id="result"></div>
+  <script>
+    document.getElementById('run-btn').onclick = async () => {
+      const btn = document.getElementById('run-btn');
+      const result = document.getElementById('result');
+      btn.disabled = true;
+      result.textContent = 'Running...';
+      try {
+        const resp = await fetch('/sync-resend');
+        const text = await resp.text();
+        result.textContent = text;
+      } catch (e) {
+        result.textContent = 'Error: ' + e;
+      }
+      btn.disabled = false;
+    };
+  </script>
+</body>
+</html>`, {
+        headers: { 'Content-Type': 'text/html' },
+      });
     } else {
       return new Response('Not found', { status: 404 });
     }

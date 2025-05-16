@@ -3,4 +3,4 @@ compatibility_date = "2023-10-01"
 nodejs_compat = true  # Enable Node.js compatibility
 
 [[triggers]]
-schedule = "45 * * * *" # Runs every hour at minute 45
+schedule = "0 4 * * *" # Runs every day at 04:00 AM UTC
